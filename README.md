@@ -238,3 +238,34 @@ com/school/
 │   ├── ResourceNotFoundException.java
 │   ├── BadRequestException.java
 │   └── GlobalExceptionHandler.java
+
+
+
+
+http://localhost:8080/api/auth/login // in postman
+
+{
+  "email": "admin@school.com",
+  "password": "Admin@123"
+}
+
+// you will get the access tolken , take that access token 
+
+
+
+open new tab and 
+http://localhost:8080/api/admin/teachers
+
+ and go to the authorization -> and Barear token -> paste the access token in the right side ->
+ open the body json and paste this  -> 
+ {
+  "name": "Ravi Kumar",
+  "email": "ravi.teacher@school.com",
+  "password": "Teacher@123",
+  "employeeId": "EMP001",
+  "subject": "Mathematics",
+  "phone": "9876543210",
+  "address": "Hyderabad"
+}
+
+-> and click on send on the post method -> u will get the status 201.
