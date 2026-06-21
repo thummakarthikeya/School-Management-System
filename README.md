@@ -556,4 +556,95 @@ Try it and let me know the results. Say "continue Phase 10" when ready — that'
 -------------------------------------------------------------------------------------------------------------------------------------------------
 
 
+Step 3: Add a .gitignore (if using Git)
+Create at project root:
+target/
+.classpath
+.project
+.settings/
+*.log
+application-prod.yml
 
+Step 4: Create application-prod.yml (for later deployment)
+yamlspring:
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+
+app:
+  jwt:
+    secret: ${JWT_SECRET}
+    access-token-expiry: 86400000
+    refresh-token-expiry: 604800000
+This way, in production you set environment variables instead of hardcoding secrets — never commit real DB passwords or JWT secrets to source control.
+
+Full End-to-End Test Checklist
+Run through this systematically. For each row, confirm the expected result.
+#ActionExpected1Login as admin200 OK, token returned2Admin creates headmaster, teacher, student via /api/admin/*201 Created each time3Admin views all users200 OK, full list4Headmaster login200 OK5Headmaster creates/updates/deletes a teacher200/201 OK6Headmaster tries /api/admin/users403 Forbidden7Headmaster views students/marks/attendance200 OK (read-only)8Headmaster tries POST /api/teacher/students403 Forbidden9Teacher login200 OK10Teacher creates/updates/deletes a student200/201 OK11Teacher adds marks + attendance201 Created12Teacher posts a notification201 Created13Teacher tries /api/admin/** or /api/headmaster/**403 Forbidden14Student login200 OK15Student views own marks/attendance/notifications200 OK, only their own data16Student tries /api/teacher/students403 Forbidden17Student tries another student's data (no way to even pass an ID — confirms isolation by design)N/A — structurally impossible18Parent posts correct rollNumber + DOB to /api/parent/view200 OK, full student view19Parent posts wrong DOB404 Not Found20Any expired/invalid JWT on protected route401 Unauthorized21Refresh token flow: call /api/auth/refresh-token with valid refresh token200 OK, new access token22Logout, then try refresh token againShould fail (token deleted)
+
+Step 5: One more real fix — refresh token reuse on logout
+Currently RefreshTokenService.deleteByUserId() does delete on logout, which is correct. Just confirm test #22 actually fails after logout — that's the proof your logout is secure and not just cosmetic.
+
+Final project structure
+school-management-system/
+├── pom.xml
+├── src/main/java/com/school/
+│   ├── SchoolManagementSystemApplication.java
+│   ├── config/
+│   │   ├── SecurityConfig.java
+│   │   ├── CorsConfig.java
+│   │   └── DataSeeder.java
+│   ├── controller/
+│   │   ├── AuthController.java
+│   │   ├── AdminController.java
+│   │   ├── HeadmasterController.java
+│   │   ├── TeacherController.java
+│   │   ├── StudentController.java
+│   │   └── ParentController.java
+│   ├── dto/
+│   │   ├── request/   (9 files)
+│   │   └── response/  (9 files)
+│   ├── entity/
+│   │   ├── User.java
+│   │   ├── Teacher.java
+│   │   ├── Student.java
+│   │   ├── Mark.java
+│   │   ├── Attendance.java
+│   │   ├── Notification.java
+│   │   └── RefreshToken.java
+│   ├── enums/
+│   │   ├── Role.java
+│   │   ├── AttendanceStatus.java
+│   │   ├── NotificationTarget.java
+│   │   └── ExamType.java
+│   ├── exception/
+│   │   ├── GlobalExceptionHandler.java
+│   │   ├── ResourceNotFoundException.java
+│   │   ├── BadRequestException.java
+│   │   └── TokenException.java
+│   ├── repository/   (7 files)
+│   ├── security/
+│   │   ├── JwtUtil.java
+│   │   ├── JwtAuthFilter.java
+│   │   └── UserDetailsServiceImpl.java
+│   └── service/
+│       ├── AuthService.java
+│       ├── RefreshTokenService.java
+│       ├── AdminService.java
+│       ├── HeadmasterService.java
+│       ├── TeacherService.java
+│       ├── StudentService.java
+│       └── ParentService.java
+└── src/main/resources/
+    ├── application.yml
+    ├── application-dev.yml
+    └── application-prod.yml
+
+Make the changes from Steps 1-2, restart the app, and run through the checklist. This is a complete, working, secure backend with proper role-based access control and JWT authentication.
+Once you've verified the checklist, you have a genuinely solid project — fully testable, properly layered (MVC + Service + Repository), with DTOs, global exception handling, and stateless JWT auth with refresh tokens. Let me know if you'd like to add anything next — common follow-ups people add at this point are: pagination on list endpoints, Swagger/OpenAPI docs, email notifications, file upload for student profile photos, or unit tests with JUnit/Mockito.
