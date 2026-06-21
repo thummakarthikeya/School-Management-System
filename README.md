@@ -269,3 +269,291 @@ http://localhost:8080/api/admin/teachers
 }
 
 -> and click on send on the post method -> u will get the status 201.
+
+
+-------------------------------------------------------------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+com/school/
+├── controller/
+│   ├── AuthController.java
+│   ├── AdminController.java
+│   └── HeadmasterController.java
+├── service/
+│   ├── AuthService.java
+│   ├── RefreshTokenService.java
+│   ├── AdminService.java
+│   └── HeadmasterService.java
+
+
+POST http://localhost:8080/api/admin/users
+Authorization tab → Bearer Token → admin's accessToken
+Body → raw → JSON:
+{
+  "name": "Principal Sharma",
+  "email": "headmaster@school.com",
+  "password": "Head@123",
+  "role": "HEADMASTER"
+}
+
+
+Click Send, and this time carefully check the response panel — confirm it shows 201 Created (or 200 OK) with "success": true and the headmaster's data including "role": "HEADMASTER".
+
+
+Step 2: Verify it saved:
+
+GET http://localhost:8080/api/admin/users
+Authorization tab → Bearer Token → admin's accessToken
+
+
+
+Confirm you now see 3 users: admin, teacher (Ravi Kumar), and headmaster (Principal Sharma).
+Step 3: Now login as headmaster
+POST http://localhost:8080/api/auth/login
+Body:
+{
+  "email": "headmaster@school.com",
+  "password": "Head@123"
+}
+
+
+
+access token
+
+10:29 PM
+Now let's run the actual security test from before.
+
+Test 1: Headmaster should be blocked from admin-only routes
+GET http://localhost:8080/api/admin/users
+Authorization tab → Bearer Token → paste the headmaster's accessToken
+Click Send. Expected result: 403 Forbidden.
+
+
+Test 2: Headmaster should succeed on their own routes
+GET http://localhost:8080/api/headmaster/teachers
+Authorization tab → Bearer Token → same headmaster accessToken
+Click Send. Expected result: 200 OK with the teacher list (Ravi Kumar should show up).
+
+
+
+
+-------------------------------------------------------------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+Test it
+You already have a teacher account (ravi.teacher@school.com / Teacher@123). Login as that teacher first to get a token, then try:
+1. Create a student:
+POST http://localhost:8080/api/teacher/students
+Authorization: Bearer <teacher-access-token>
+
+{
+  "rollNumber": "S001",
+  "name": "Anjali Verma",
+  "dateOfBirth": "2012-05-14",
+  "className": "8",
+  "section": "A",
+  "phone": "9000000001",
+  "parentPhone": "9000000002",
+  "address": "Hyderabad"
+}
+2. Add a mark for that student (use the id returned above, not the roll number):
+POST http://localhost:8080/api/teacher/marks
+Authorization: Bearer <teacher-access-token>
+
+{
+  "studentId": 1,
+  "subject": "Mathematics",
+  "marksObtained": 85,
+  "totalMarks": 100,
+  "examType": "MID_TERM",
+  "examDate": "2026-06-15"
+}
+3. Mark attendance:
+POST http://localhost:8080/api/teacher/attendance
+Authorization: Bearer <teacher-access-token>
+
+{
+  "studentId": 1,
+  "date": "2026-06-21",
+  "status": "PRESENT"
+}
+4. Post a notification:
+POST http://localhost:8080/api/teacher/notifications
+Authorization: Bearer <teacher-access-token>
+
+{
+  "title": "Holiday Notice",
+  "message": "School will remain closed on Friday for maintenance.",
+  "targetRole": "ALL"
+}
+Try all four and let me know the results.
+
+Your structure now:
+com/school/
+├── controller/
+│   ├── AuthController.java
+│   ├── AdminController.java
+│   ├── HeadmasterController.java
+│   └── TeacherController.java
+├── service/
+│   ├── AuthService.java
+│   ├── RefreshTokenService.java
+│   ├── AdminService.java
+│   ├── HeadmasterService.java
+│   └── TeacherService.java
+Say "continue Phase 8" when ready, and I'll build the Student service + controller.
+
+
+
+-------------------------------------------------------------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------------------------------------------------------
+
+Why no studentId in the URL or body?
+This is the key security design here: a student should never be able to pass studentId=5 and see someone else's marks. Instead, we always derive the student record from authentication.getName() — which comes from the verified JWT email — so a student can only ever see their own data, no matter what they try to send.
+
+Test it
+The student you created earlier (Anjali Verma, roll S001) doesn't have login credentials yet, because we didn't pass email/password when creating her. Let's create a student with login this time so we can test this properly.
+1. Create a new student with login credentials (as teacher):
+POST http://localhost:8080/api/teacher/students
+Authorization: Bearer <teacher-access-token>
+
+{
+  "rollNumber": "S002",
+  "name": "Karthik Reddy",
+  "dateOfBirth": "2011-08-20",
+  "className": "9",
+  "section": "B",
+  "phone": "9000000003",
+  "parentPhone": "9000000004",
+  "address": "Hyderabad",
+  "email": "karthik.student@school.com",
+  "password": "Student@123"
+}
+2. Add a mark and mark attendance for this new student (use the new id returned, e.g. 2):
+POST http://localhost:8080/api/teacher/marks
+Authorization: Bearer <teacher-access-token>
+
+{
+  "studentId": 2,
+  "subject": "Science",
+  "marksObtained": 78,
+  "totalMarks": 100,
+  "examType": "UNIT_TEST",
+  "examDate": "2026-06-18"
+}
+POST http://localhost:8080/api/teacher/attendance
+Authorization: Bearer <teacher-access-token>
+
+{
+  "studentId": 2,
+  "date": "2026-06-21",
+  "status": "PRESENT"
+}
+3. Login as the student:
+POST http://localhost:8080/api/auth/login
+
+{
+  "email": "karthik.student@school.com",
+  "password": "Student@123"
+}
+Copy the accessToken.
+4. View own marks:
+GET http://localhost:8080/api/student/marks
+Authorization: Bearer <student-access-token>
+Should return only Karthik's Science mark.
+5. View own attendance:
+GET http://localhost:8080/api/student/attendance
+Authorization: Bearer <student-access-token>
+6. View notifications:
+GET http://localhost:8080/api/student/notifications
+Authorization: Bearer <student-access-token>
+Should return the "Holiday Notice" you posted earlier (since it was targeted to ALL).
+
+Your structure now:
+com/school/
+├── controller/
+│   ├── AuthController.java
+│   ├── AdminController.java
+│   ├── HeadmasterController.java
+│   ├── TeacherController.java
+│   └── StudentController.java
+├── service/
+│   ├── AuthService.java
+│   ├── RefreshTokenService.java
+│   ├── AdminService.java
+│   ├── HeadmasterService.java
+│   ├── TeacherService.java
+│   └── StudentService.java
+Try these tests and let me know the results. Say "continue Phase 9" when ready, and I'll build the Parent controller — the no-login lookup by roll number + date of birth.
+
+
+
+
+-------------------------------------------------------------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+
+Why this is safe even without login
+A parent needs both the exact roll number and the exact date of birth to get any data back — this acts as a shared secret only the family would know (it's commonly printed on report cards / admission forms), so it's a reasonable lightweight verification for a read-only, non-sensitive-action endpoint. If you ever wanted to harden this further later (e.g. rate-limiting to stop someone brute-forcing roll numbers), that would be a good addition — but it's not required for the assignment scope you described.
+
+Test it
+No token needed at all for this one.
+POST http://localhost:8080/api/parent/view
+Content-Type: application/json
+
+{
+  "rollNumber": "S002",
+  "dateOfBirth": "2011-08-20"
+}
+Expected response: Karthik Reddy's full profile, his Science mark, his attendance record, and any notifications targeted to PARENT or ALL.
+Also test the failure case — wrong date of birth:
+json{
+  "rollNumber": "S002",
+  "dateOfBirth": "2011-08-21"
+}
+Should return 404 Not Found with "No student found with the given roll number and date of birth."
+
+Your structure now:
+com/school/
+├── controller/
+│   ├── AuthController.java
+│   ├── AdminController.java
+│   ├── HeadmasterController.java
+│   ├── TeacherController.java
+│   ├── StudentController.java
+│   └── ParentController.java
+├── service/
+│   ├── AuthService.java
+│   ├── RefreshTokenService.java
+│   ├── AdminService.java
+│   ├── HeadmasterService.java
+│   ├── TeacherService.java
+│   ├── StudentService.java
+│   └── ParentService.java
+Try it and let me know the results. Say "continue Phase 10" when ready — that's the final phase: polishing exception handling, double-checking the ApiResponse wrapper everywhere, and a full end-to-end test checklist to make sure every role boundary is airtight.
+
+
+
+-------------------------------------------------------------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+
